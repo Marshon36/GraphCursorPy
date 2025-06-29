@@ -1,0 +1,8 @@
+numpy
+scipy
+pandas
+matplotlib
+cartopy
+obspy
+torch
+torch_geometric
