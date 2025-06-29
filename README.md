@@ -1,14 +1,14 @@
 # GraphCursorPy
 
-**GraphCursorPy** is a Python toolkit for detecting PKP precursors and locating scatterers using Graph Neural Networks (GNNs) and related deep learning methods. It is designed for multistation waveform analysis.
+**GraphCursorPy** is a Python toolkit for processing PKP precursors based on Graph Neural Networks (GNNs) and related seismic methods.
 
 ---
 
 ## 🌟 Key Features
 
 - GNN-based multistation detection of PKP precursors
-- Integrated support for waveform processing, travel-time matching, and prediction
-- Extendable to other weak seismic phases with similar dominant frequency (1 Hz) as PKP precursors (e.g., SKKKP)
+- Estimation of scatterer locations and relative strengths
+- Extendable to other weak seismic phases with similar dominant frequency (~1 Hz), such as SKKKP
 - Built-in example data and precomputed travel-time tables for quick testing
 
 ---
@@ -32,7 +32,7 @@ Before using GraphCursorPy, make sure the following external tools are installed
 
 ## 🚀 Quick Start
 
-### Run the example:
+Run the provided example script:
 
 ```
 python graphcursorpy/example.py
