@@ -1,6 +1,6 @@
 # GraphCursorPy
 
-**GraphCursorPy** is a Python toolkit for detecting PKP precursors using Graph Neural Networks (GNNs) and related deep learning methods. It is designed for multistation waveform analysis.
+**GraphCursorPy** is a Python toolkit for detecting PKP precursors and locating scatterers using Graph Neural Networks (GNNs) and related deep learning methods. It is designed for multistation waveform analysis.
 
 ---
 
