@@ -8,7 +8,6 @@
 
 - GNN-based multistation detection of PKP precursors
 - Estimation of scatterer locations and relative strengths
-- Extendable to other weak seismic phases with similar dominant frequency (~1 Hz), such as SKKKP
 - Built-in example data and precomputed travel-time tables for quick testing
 
 ---
