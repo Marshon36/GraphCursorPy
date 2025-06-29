@@ -6,10 +6,10 @@
 
 ## 🌟 Key Features
 
-- 📍 GNN-based multistation detection of PKP precursors
-- 🔬 Integrated support for waveform processing, travel-time matching, and prediction
-- 🧠 Extendable to other weak seismic phases with similar dominant frequency (1 Hz) as PKP precursors (e.g., SKKKP)
-- 🌐 Built-in example data and precomputed travel-time tables for quick testing
+- GNN-based multistation detection of PKP precursors
+- Integrated support for waveform processing, travel-time matching, and prediction
+- Extendable to other weak seismic phases with similar dominant frequency (1 Hz) as PKP precursors (e.g., SKKKP)
+- Built-in example data and precomputed travel-time tables for quick testing
 
 ---
 
