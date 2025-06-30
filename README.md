@@ -34,5 +34,6 @@ Before using GraphCursorPy, make sure the following external tools are installed
 Run the provided example script:
 
 ```
-python graphcursorpy/example.py
+cd graphcursorpy
+python example.py
 ```
