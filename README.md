@@ -17,7 +17,7 @@
 Clone the repository and install the package in editable mode:
 
 ```bash
-git clone https://github.com/your-username/GraphCursorPy.git
+git clone https://github.com/Marshon36/GraphCursorPy.git
 cd GraphCursorPy
 pip install -e .
 ```
