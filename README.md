@@ -26,8 +26,8 @@ pip install -e .
 
 Before using GraphCursorPy, make sure the following external tools are installed:
 
-* **[TauP](https://www.seis.sc.edu/taup/)** – for theoretical travel-time computation
-* **[VesPy](https://github.com/NeilWilkins/VesPy)** – for seismic array analysis
+* **TauP** – developed by Crotwell et al. and available from [https://www.seis.sc.edu/taup/](https://www.seis.sc.edu/taup/), for theoretical travel-time computation
+* **VesPy** – developed by NeilWilkins and available from [https://github.com/NeilWilkins/VesPy](https://github.com/NeilWilkins/VesPy), for seismic array analysis
 
 ## 🚀 Quick Start
 
