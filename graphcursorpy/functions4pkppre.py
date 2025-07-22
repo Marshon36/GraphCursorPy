@@ -25,7 +25,7 @@ from graphcursorpy.functions4common import normalize, detect_peaks, DistAz, plot
 min_scadp, max_scadp, scadp_interval = 2391, 2891, 50
 scadps = np.arange(min_scadp, max_scadp+scadp_interval, scadp_interval)
 
-def screen_predictions(df_array, pred_path, mph,  mpd, config):
+def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
     """
     Process and filter predictions from GraphCursor model outputs.
     
@@ -35,6 +35,10 @@ def screen_predictions(df_array, pred_path, mph,  mpd, config):
         mph (float): Minimum peak height threshold for detection
         mpd (float): Minimum peak distance (in samples)
         config (module): A Python module containing configuration settings. 
+        time_thres (float, optional): Time threshold for filtering detections. Only detections
+                                      with a primary peak time less than or equal to this
+                                      threshold (relative to the `config.pre_window` start time)
+                                      will be included in the final output. Defaults to -3.
         
     Returns:
         dict: Filtered dict with keys:
@@ -99,8 +103,8 @@ def screen_predictions(df_array, pred_path, mph,  mpd, config):
     for key in dict:
         dict[key] = np.array(dict[key])
     
-    # Apply time filter (-3s threshold)
-    time_mask = dict['outputs'][:, 0] <= -3
+    # Apply time filter
+    time_mask = dict['outputs'][:, 0] <= time_thres
     filtered_dict = {
         'df_array': df_array.loc[time_mask].reset_index(drop=True),
         'fnames': dict['fnames'][time_mask],
