@@ -319,17 +319,17 @@ def detect_pkppre(input, mph, mpd, config):
 
 def calculate_eq2sca_times(df, sca_points, evla, evlo, evdp):
     """
-    Optimized function to calculate travel times from seismic source to scatter points.
+    Optimized function to calculate travel times from seismic source to scatterer points.
     
     Args:
         df: DataFrame with precomputed distances and travel times.
-        sca_points: List of scatter points (latitude, longitude).
+        sca_points: List of scatterer points (latitude, longitude).
         evla: Latitude of the seismic event.
         evlo: Longitude of the seismic event.
         evdp: Depth of the seismic event.
     
     Returns:
-        eq2sca_times: Array of travel times for each scatter point.
+        eq2sca_times: Array of travel times for each scatterer point.
     """
 
     # Convert columns to NumPy arrays for faster processing
@@ -352,7 +352,7 @@ def calculate_eq2sca_times(df, sca_points, evla, evlo, evdp):
     for i, sca_point in enumerate(sca_points):
         sca_lat, sca_lon = sca_point[0], sca_point[1]
 
-        # Calculate the distance from the source-side scatter point to the seismic source
+        # Calculate the distance from the source-side scatterer point to the seismic source
         sca_dist = DistAz(sca_lat, sca_lon, evla, evlo).getDelta()
 
         # Use NumPy to find the index of the closest distance
@@ -367,11 +367,11 @@ def calculate_eq2sca_times(df, sca_points, evla, evlo, evdp):
 
 def calculate_sca2sta_times(df_sca2sta, sca_points, stas):
     """
-    Calculate the travel time from source-side scatter to each station.
+    Calculate the travel time from source-side scatterer to each station.
 
     Args:
         df_sca2sta: DataFrame with precomputed distances and travel times.
-        sca_points: List of scatter points (latitude, longitude).
+        sca_points: List of scatterer points (latitude, longitude).
         stas: List of stations (latitude, longitude).
 
     Returns:
@@ -391,7 +391,7 @@ def calculate_sca2sta_times(df_sca2sta, sca_points, stas):
         for j, sta in enumerate(stas):
             sta_lat, sta_lon = float(sta[0]), float(sta[1])
 
-            # Calculate the distance from the source-side scatter point to the station
+            # Calculate the distance from the source-side scatterer point to the station
             sca2sta_dist = DistAz(sca_lat, sca_lon, sta_lat, sta_lon).getDelta()
 
             # Use NumPy to find the closest distance index
@@ -407,12 +407,12 @@ def calculate_sca2sta_times(df_sca2sta, sca_points, stas):
 def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
                        stas, pkpdfs, pkppres, config, time_window = 2):
     """
-    Calculate PKP precursor arrivals and stack predictions for each scatter point.
+    Calculate PKP precursor arrivals and stack predictions for each scatterer point.
 
     Args:
-        sca_points (np.ndarray): Array of shape (n_points, 2) containing (lat, lon) of scatter points.
-        eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatter times.
-        sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatter-to-station times.
+        sca_points (np.ndarray): Array of shape (n_points, 2) containing (lat, lon) of scatterer points.
+        eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatterer times.
+        sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatterer-to-station times.
         stas (list): List of station identifiers.
         pkpdfs (np.ndarray): Array of PKPdf arrival times for each station.
         pkppres (np.ndarray): Array of PKPpre arrival times relative to PKPdf for each station.
@@ -420,15 +420,15 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
         time_window (float): Time uncertainty in seconds for stacking (default: 2.0).
 
     Returns:
-        stacks: Array of stacked predictions for each scatter point.
+        stacks: Array of stacked predictions for each scatterer point.
     """
-    # Initialize an array to store the maximum stacked predictions for each scatter point
+    # Initialize an array to store the maximum stacked predictions for each scatterer point
     stacks = np.zeros((len(sca_points), len(config.scadps)))  # Default as NaN to mark uncalculated points
     
-    # Precompute theo_pkppre for all scatter points and stations
+    # Precompute theo_pkppre for all scatterer points and stations
     theo_pkppres = eq2sca_times[:, :, np.newaxis] + sca2sta_times  # Shape (n_sca_points, n_scadps, n_stas)
 
-    # Loop through each scatter point
+    # Loop through each scatterer point
     for i in range(len(sca_points)):
         for j in range(len(config.scadps)):
             useful_stas = 0
@@ -441,7 +441,7 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
                     if abs(theo_pkppre - real_pkppre) <= time_window:
                         stacks[i, j] += 1
 
-            # Store the maximum value of stacked predictions for the current scatter point
+            # Store the maximum value of stacked predictions for the current scatterer point
             if useful_stas > 0:
                 stacks[i, j] = stacks[i, j]/len(stas)
     return stacks
@@ -449,12 +449,12 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
 def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
                       stas, pkpdfs, inputs, config, time_window = 2):
     """
-    Calculate PKP precursor arrivals and stack predictions for each scatter point.
+    Calculate PKP precursor arrivals and stack predictions for each scatterer point.
 
     Args:
-        sca_points (np.ndarray): Array of shape (n_points, 2) containing (lat, lon) of scatter points.
-        eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatter times.
-        sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatter-to-station times.
+        sca_points (np.ndarray): Array of shape (n_points, 2) containing (lat, lon) of scatterer points.
+        eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatterer times.
+        sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatterer-to-station times.
         stas (list): List of station identifiers.
         pkpdfs (np.ndarray): Array of PKPdf arrival times for each station.
         inputs (np.ndarray): 2D array (n_stas, waveform_len) of prediction waveforms.
@@ -462,15 +462,15 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
         time_window (float): Time window length in seconds for stacking (default: 2.0).
 
     Returns:
-        stacks: Array of stacked predictions for each scatter point.
+        stacks: Array of stacked predictions for each scatterer point.
     """
-    # Initialize an array to store the maximum stacked predictions for each scatter point
+    # Initialize an array to store the maximum stacked predictions for each scatterer point
     stacks = np.full((len(sca_points), len(scadps)), np.nan)  # Default as NaN to mark uncalculated points
     
-    # Precompute theo_pkppre for all scatter points and stations
+    # Precompute theo_pkppre for all scatterer points and stations
     theo_pkppres = eq2sca_times[:, :, np.newaxis] + sca2sta_times  # Shape (n_sca_points, n_scadps, n_stas)
 
-    # Loop through each scatter point
+    # Loop through each scatterer point
     for i in range(len(sca_points)):
         for j in range(len(scadps)):
             useful_stas = 0
@@ -488,7 +488,7 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
                         prediction4stack = prediction4stack
                         stacked_prediction[:len(prediction4stack)] += prediction4stack
 
-            # Store the maximum value of stacked predictions for the current scatter point
+            # Store the maximum value of stacked predictions for the current scatterer point
             if useful_stas > 0:
                 stacks[i, j] = max(stacked_prediction)/len(stas)
     return stacks
@@ -496,7 +496,7 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
 def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, station_data, config,
                             method, time_window = 2):
     """
-    Calculate PKP precursor arrivals and stack predictions for each scatter point on one side
+    Calculate PKP precursor arrivals and stack predictions for each scatterer point on one side
     (either source-side or receiver-side).
 
     Args:
@@ -515,7 +515,7 @@ def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, stat
     Returns:
         dict: A dictionary with the following keys:
             - 'points' (np.ndarray): Scatter grid points as (lat, lon) coordinates.
-            - 'stacks' (np.ndarray): Stacked prediction results for each scatter point.
+            - 'stacks' (np.ndarray): Stacked prediction results for each scatterer point.
             - 'travel_times' (np.ndarray): Total travel times (eq-to-sca + sca-to-sta), shape (n_points, n_stas, 1).
     """
     sca_points = create_grid(pierce_point[0], pierce_point[1], config.diff, config.step)
@@ -636,8 +636,13 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
             - secondary_side: 'source' or 'receiver'.
             - source_grids: Grids in source side.
             - receiver_grids: Grids in receiver side.
-            - max_scatterer: Dict of maximum amplitude scatterer point details.
-            - min_scatterer: Dict of secondary scatterer point details.
+            - sca_lat_max: scatterer latitude.
+            - sca_lon_max: scatterer longitude.
+            - max_amp: scattering amplitude.
+            - sca_lat_min: scatterer latitude in the secondary side.
+            - sca_lon_min: scatterer longitude in the secondary side.
+            - min_amp: scattering amplitude in the secondary side.
+            - depth: scatterer depth.
             - pierce_points: Tuple of (source_pierce, receiver_pierce).
             - metadata: 'array': array_data['array'], 'event_location': event_loc, 'station_centroid': [centroid_lat, centroid_lon]
         }
@@ -1271,11 +1276,11 @@ def _process_grid_point(args):
     Note:
         Designed to run in isolated worker processes
     """
-    grid_point, stla, stlo, scatter_depth, loc_type = args
+    grid_point, stla, stlo, scatterer_depth, loc_type = args
     try:
         scala, scalo = grid_point
         baz = DistAz(stla, stlo, scala, scalo).getBaz()
-        slowness = calculate_theoretical_slowness(scala, scalo, scatter_depth, stla, stlo, loc=loc_type)
+        slowness = calculate_theoretical_slowness(scala, scalo, scatterer_depth, stla, stlo, loc=loc_type)
         return (scala, scalo, baz, slowness, loc_type)
     except Exception as e:
         print(f"Error processing {grid_point}: {str(e)}")
@@ -1289,7 +1294,6 @@ def slowness_analysis(sca_infos, array_result, baz_range = 5, weights = (0.5, 0.
         sca_infos: Dictionary containing:
             - 'source_grids': List of (lat,lon) tuples for source-side grids
             - 'receiver_grids': List of (lat,lon) tuples for receiver-side grids
-            - 'max_scatter': Dictionary with 'depth' key (km)
         array_result: Dictionary containing:
             - 'fk_slowness': Observed slowness from FK (s/deg)
             - 'vespa_slowness': Observed slowness from vespagram (s/deg)
@@ -1303,13 +1307,9 @@ def slowness_analysis(sca_infos, array_result, baz_range = 5, weights = (0.5, 0.
     Returns:
         pd.DataFrame: Contains all grid points with calculated residuals
     """
-    # Determine scatter depths based on dominant side
-    if sca_infos['dominant_side'] == 'source':
-        source_scatter_depth = float(sca_infos['max_scatter']['depth'])
-        receiver_scatter_depth = float(sca_infos['min_scatter']['depth'])
-    else:
-        source_scatter_depth = float(sca_infos['min_scatter']['depth'])
-        receiver_scatter_depth = float(sca_infos['max_scatter']['depth'])
+    # Determine scatterer depths based on dominant side
+    source_scatterer_depth = float(sca_infos['depth'])
+    receiver_scatterer_depth = float(sca_infos['depth'])
     stla, stlo = float(array_result['stla']), float(array_result['stlo'])
 
     # Filter grids and check whether their travel times smaller than PKIKP
@@ -1327,9 +1327,9 @@ def slowness_analysis(sca_infos, array_result, baz_range = 5, weights = (0.5, 0.
     
     try:
         tasks = [
-            *( (pt, stla, stlo, source_scatter_depth, 'source') 
+            *( (pt, stla, stlo, source_scatterer_depth, 'source') 
             for pt in filtered_source_grids ),
-            *( (pt, stla, stlo, receiver_scatter_depth, 'receiver') 
+            *( (pt, stla, stlo, receiver_scatterer_depth, 'receiver') 
             for pt in filtered_receiver_grids )
         ]
 
