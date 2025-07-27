@@ -47,7 +47,7 @@ def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
             'waveforms': Filtered waveforms
             'predictions': Filtered prediction arrays
             'station_locs': Station coordinates
-            'times': PKP precursor times
+            'pkppre_times': PKP precursor arrival times relative to PKPdf for each station
     """
 
     # Initialize containers using dictionary for better organization
@@ -92,12 +92,12 @@ def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
         
         # Store results
         dict['predictions'].append(pred)
-        dict['outputs'].append(detection)
         dict['waveforms'].append(trimmed_waveform)
-        dict['fnames'].append(row['fname'])
         dict['station_locs'].append([tr.stats.sac.stla, tr.stats.sac.stlo])
         dict['pkpdf_times'].append(tr.stats.starttime + config.pre_window - event_time)
         dict['dists'].append(row['dist'])
+        dict['fnames'].append(row['fname'])
+        dict['outputs'].append(detection)
     
     # Convert to numpy arrays
     for key in dict:
@@ -113,7 +113,7 @@ def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
         'predictions': dict['predictions'][time_mask],
         'station_locs': dict['station_locs'][time_mask],
         'pkpdf_times': dict['pkpdf_times'][time_mask],
-        'times': dict['outputs'][time_mask][:, 0],
+        'pkppre_times': dict['outputs'][time_mask][:, 0],
         'evla': evla,
         'evlo': evlo,
         'evdp': evdp
@@ -404,8 +404,50 @@ def calculate_sca2sta_times(df_sca2sta, sca_points, stas):
 
     return sca2sta_times
 
+def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
+                       stas, pkpdfs, pkppres, config, time_window = 2):
+    """
+    Calculate PKP precursor arrivals and stack predictions for each scatter point.
+
+    Args:
+        sca_points (np.ndarray): Array of shape (n_points, 2) containing (lat, lon) of scatter points.
+        eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatter times.
+        sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatter-to-station times.
+        stas (list): List of station identifiers.
+        pkpdfs (np.ndarray): Array of PKPdf arrival times for each station.
+        pkppres (np.ndarray): Array of PKPpre arrival times relative to PKPdf for each station.
+        config (module): A Python module containing configuration settings. 
+        time_window (float): Time uncertainty in seconds for stacking (default: 2.0).
+
+    Returns:
+        stacks: Array of stacked predictions for each scatter point.
+    """
+    # Initialize an array to store the maximum stacked predictions for each scatter point
+    stacks = np.zeros((len(sca_points), len(config.scadps)))  # Default as NaN to mark uncalculated points
+    
+    # Precompute theo_pkppre for all scatter points and stations
+    theo_pkppres = eq2sca_times[:, :, np.newaxis] + sca2sta_times  # Shape (n_sca_points, n_scadps, n_stas)
+
+    # Loop through each scatter point
+    for i in range(len(sca_points)):
+        for j in range(len(config.scadps)):
+            useful_stas = 0
+            for k in range(len(stas)):
+                pkpdf = pkpdfs[k]
+                theo_pkppre = theo_pkppres[i, j, k] - pkpdf
+                real_pkppre = pkppres[k]
+                if -config.waveform_time < theo_pkppre < 0:
+                    useful_stas += 1
+                    if abs(theo_pkppre - real_pkppre) <= time_window:
+                        stacks[i, j] += 1
+
+            # Store the maximum value of stacked predictions for the current scatter point
+            if useful_stas > 0:
+                stacks[i, j] = stacks[i, j]/len(stas)
+    return stacks
+
 def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
-                      stas, pkpdfs, inputs, config, window = 2, norm = True):
+                      stas, pkpdfs, inputs, config, time_window = 2):
     """
     Calculate PKP precursor arrivals and stack predictions for each scatter point.
 
@@ -417,8 +459,7 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
         pkpdfs (np.ndarray): Array of PKPdf arrival times for each station.
         inputs (np.ndarray): 2D array (n_stas, waveform_len) of prediction waveforms.
         config (module): A Python module containing configuration settings. 
-        window (float): Time window length in seconds for stacking (default: 2.0).
-        norm (bool): Whether to normalize individual waveforms before stacking (default: True).
+        time_window (float): Time window length in seconds for stacking (default: 2.0).
 
     Returns:
         stacks: Array of stacked predictions for each scatter point.
@@ -438,16 +479,13 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
                 pkpdf = pkpdfs[k]
                 if theo_pkppres[i, j, k] > (pkpdf - config.waveform_time) and theo_pkppres[i, j, k] < pkpdf:
 
-                    # A window of 2 s length around the theoretical arrival (from Thomas, 1999)
-                    start_idx = int((theo_pkppres[i, j, k] - pkpdf + config.waveform_time - window/2) * config.sr)
-                    end_idx = int(start_idx + window * config.sr)
+                    # A window around the theoretical arrival
+                    start_idx = int((theo_pkppres[i, j, k] - pkpdf + config.waveform_time - time_window/2) * config.sr)
+                    end_idx = int(start_idx + time_window * config.sr)
                     if start_idx >= 0 and end_idx < len(inputs[k]):
                         useful_stas += 1
                         prediction4stack = inputs[k][start_idx:end_idx]
-                        if norm:
-                            prediction4stack = prediction4stack/np.max(np.abs(prediction4stack))
-                        else:
-                            prediction4stack = prediction4stack
+                        prediction4stack = prediction4stack
                         stacked_prediction[:len(prediction4stack)] += prediction4stack
 
             # Store the maximum value of stacked predictions for the current scatter point
@@ -456,7 +494,7 @@ def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
     return stacks
 
 def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, station_data, config,
-                            window = 2, norm = True):
+                            method, time_window = 2):
     """
     Calculate PKP precursor arrivals and stack predictions for each scatter point on one side
     (either source-side or receiver-side).
@@ -471,8 +509,8 @@ def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, stat
             - 'pkpdf_times' (np.ndarray): PKPdf arrival times at each station.
             - 'predictions' (np.ndarray): Prediction waveform array for each station.
         config (object): Configuration object with fields such as 'diff' (grid size) and 'step' (grid step).
-        window (float, optional): Time window (in seconds) used for stacking predictions (default is 2).
-        norm (bool, optional): Whether to normalize prediction waveforms before stacking (default is True).
+        method (str): Choose a method to locate scatterer (isotime or migration).
+        time_window (float, optional): Time window (in seconds) used for stacking predictions (default is 2).
 
     Returns:
         dict: A dictionary with the following keys:
@@ -484,11 +522,19 @@ def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, stat
     eq2sca_times = calculate_eq2sca_times(eq2sca_df, sca_points, event_loc['lat'], event_loc['lon'], event_loc['depth'])
     sca2sta_times = calculate_sca2sta_times(sca2sta_df, sca_points, station_data['locations'])
     
-    stacks = stack_predictions(
-        sca_points, eq2sca_times, sca2sta_times,
-        station_data['locations'], station_data['pkpdf_times'], 
-        station_data['predictions'], config, window, norm
-    )
+    if method == 'isotime':
+        stacks = stack_isotime_arcs(
+            sca_points, eq2sca_times, sca2sta_times,
+            station_data['locations'], station_data['pkpdf_times'], 
+            station_data['pkppre_times'], config, time_window
+        )
+
+    if method == 'migration':
+        stacks = stack_predictions(
+            sca_points, eq2sca_times, sca2sta_times,
+            station_data['locations'], station_data['pkpdf_times'], 
+            station_data['predictions'], config, time_window
+        )
     
     return {
         'points': sca_points,
@@ -554,12 +600,13 @@ def iterative_centroid(lats, lons, weights=None, max_iter=10, radius_factor=0.3)
     
     return current_lat, current_lon
 
-def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta, 
-                             df_eq2receiver_sca, df_receiver_sca2sta, config, 
-                             window = 2, norm = True, plot = False,
-                             save_fig = False, output_dir=None):
+def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta, 
+                     df_eq2receiver_sca, df_receiver_sca2sta, config,
+                     method = 'isotime', time_window = 2, plot = False,
+                     save_fig = False, output_dir=None):
     """
-    Locate scattering points by migrating seismic array data and GraphCursor predictions.
+    Locate scattering points by migrating GraphCursor predictions or 
+    stacking the isotime scatterer arcs (Wen, 2000).
     
     Args:
         dict4location (dict): Contains:
@@ -576,10 +623,10 @@ def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta,
             Ray tracing results from event to receiver-side scattering points  
         df_receiver_sca2sta : pd.DataFrame
             Ray tracing results from receiver-side scattering to stations
-        config (module): A Python module containing configuration settings. 
-        window (float): Time window length in seconds for stacking (default: 2.0).
-        norm (bool): Whether to normalize individual waveforms before stacking (default: True).
-        plot (bool): Whether to generate scatter location plots (default: False).
+        config (module): A Python module containing configuration settings.
+        method (str): Choose a method to locate scatterer (isotime or migration).
+        time_window (float): Time window length in seconds for stacking (default: 2.0).
+        plot (bool): Whether to generate scatterer location plots (default: False).
         save_fig (bool): Whether to save the figure (default: False).
         output_dir (str): Directory to save figures (required if save_fig=True).
     
@@ -589,8 +636,8 @@ def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta,
             - secondary_side: 'source' or 'receiver'.
             - source_grids: Grids in source side.
             - receiver_grids: Grids in receiver side.
-            - max_scatter: Dict of maximum amplitude scatter point details.
-            - min_scatter: Dict of secondary scatter point details.
+            - max_scatterer: Dict of maximum amplitude scatterer point details.
+            - min_scatterer: Dict of secondary scatterer point details.
             - pierce_points: Tuple of (source_pierce, receiver_pierce).
             - metadata: 'array': array_data['array'], 'event_location': event_loc, 'station_centroid': [centroid_lat, centroid_lon]
         }
@@ -606,7 +653,8 @@ def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta,
     station_data = {
         'locations': dict4location['station_locs'],
         'predictions': dict4location['predictions'],
-        'pkpdf_times': dict4location['pkpdf_times']
+        'pkpdf_times': dict4location['pkpdf_times'],
+        'pkppre_times': dict4location['pkppre_times']
     }
 
     # Calculate station centroid and pierce points
@@ -618,9 +666,9 @@ def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta,
 
     # Process both scattering sides
     source_side = process_scattering_side(source_pierce, df_eq2source_sca, df_source_sca2sta, 
-                                          event_loc, station_data, config, window, norm)
+                                          event_loc, station_data, config, method, time_window)
     receiver_side = process_scattering_side(receiver_pierce, df_eq2receiver_sca, df_receiver_sca2sta, 
-                                            event_loc, station_data, config, window, norm)
+                                            event_loc, station_data, config, method, time_window)
     source_dp_idx = np.unravel_index(np.nanargmax(source_side['stacks']), source_side['stacks'].shape)[1]
     receiver_dp_idx = np.unravel_index(np.nanargmax(receiver_side['stacks']), receiver_side['stacks'].shape)[1]
 
@@ -638,7 +686,7 @@ def locate_scatter_migration(dict4location, df_eq2source_sca, df_source_sca2sta,
         max_data, min_data = receiver_side, source_side
         dp_idx = receiver_dp_idx
 
-    # Obtain the scatter location
+    # Obtain the scatterer location
     secondary_max = np.nanmax(min_data['stacks'][:, dp_idx])
     sca_lat_array = max_data['points'][:, 0][max_data['stacks'][:, dp_idx] >= secondary_max]
     sca_lon_array = max_data['points'][:, 1][max_data['stacks'][:, dp_idx] >= secondary_max]
@@ -1214,7 +1262,7 @@ def _process_grid_point(args):
             - grid_point: (latitude, longitude) coordinates
             - stla: Station latitude (degrees)
             - stlo: Station longitude (degrees) 
-            - scatter_depth: Scattering depth (km)
+            - scatterer_depth: Scattering depth (km)
             - loc_type: 'source' or 'receiver'
     
     Returns:

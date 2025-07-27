@@ -13,7 +13,7 @@ import pandas as pd
 
 import config
 from graphcursorpy.functions4AI import run_graphcursor_predictions
-from graphcursorpy.functions4pkppre import screen_predictions, locate_scatter_migration, calculate_relative_strength
+from graphcursorpy.functions4pkppre import screen_predictions, locate_scatterer, calculate_relative_strength
 from graphcursorpy.functions4common import plot_waveforms_predictions, plot_stacked_map
 
 # Load precomputed arrival time catalog:
@@ -88,29 +88,27 @@ def main():
     if len(filtered_dict['df_array']) >= config.min_stations:
         # 4.1 Migration-based location
         print(f"\n{' MIGRATION-BASED LOCATION START ':*^80}")
-        sca_infos = locate_scatter_migration(filtered_dict, df_eq2source_sca, df_source_sca2sta, 
-                                             df_eq2receiver_sca, df_receiver_sca2sta, config, plot=True)
-        print(f"  {' PRIMARY SCATTER LOCATION ':=^60}")
-        print(f"  {'Location:':<20}{sca_infos['dominant_side'].capitalize()} side")
-        print(f"  {'Longitude:':<20}{sca_infos['sca_lon_max']:>8.3f}°")
-        print(f"  {'Latitude:':<20}{sca_infos['sca_lat_max']:>8.3f}°")
-        print(f"  {'Depth:':<20}{sca_infos['depth']:>8} km")
-
-        print(f"  {' SECONDARY SCATTER LOCATION ':=^60}")
-        print(f"  {'Location:':<20}{sca_infos['secondary_side'].capitalize()} side")
-        print(f"  {'Longitude:':<20}{sca_infos['sca_lon_min']:>8.3f}°")
-        print(f"  {'Latitude:':<20}{sca_infos['sca_lat_min']:>8.3f}°")
-        print(f"{' MIGRATION-BASED LOCATION END ':*^80}")
-
-        # 4.2 Scatter strength calculation
-        print(f"\n{' SCATTER STRENGTH CALCULATION START ':*^80}")
-        relative_strength = calculate_relative_strength(filtered_dict['fnames'], stack_map, stack_fitted_line, config)
-        relative_strength_attenu = calculate_relative_strength(
-                    filtered_dict['fnames'], stack_map, stack_fitted_line, config, True)
-        print(f"  {' RELATIVE SCATTER STRENGTH ':=^60}")
-        print(f"  {'Strength:':<20}{relative_strength:>8.3f}")
-        print(f"  {'Strength after inner core attenuation correction:':<20}{relative_strength_attenu:>8.3f}")
-        print(f"{' SCATTER STRENGTH CALCULATION END ':*^80}")
+        sca_infos = locate_scatterer(filtered_dict, df_eq2source_sca, df_source_sca2sta, 
+                                     df_eq2receiver_sca, df_receiver_sca2sta, config, method = 'migration',
+                                     plot=True)
+        print(f"\n{' MIGRATION-BASED LOCATION END ':*^80}")
+        
+        # 4.2 Isotime-based location (Wen, 2000)
+        print(f"\n{' ISOTIME-BASED LOCATION START ':*^80}")
+        sca_infos = locate_scatterer(filtered_dict, df_eq2source_sca, df_source_sca2sta, 
+                                     df_eq2receiver_sca, df_receiver_sca2sta, config, method = 'isotime',
+                                     plot=True)
+        print(f"\n{' ISOTIME-BASED LOCATION END ':*^80}")
+        
+        # # 4.3 Scatter strength calculation
+        # print(f"\n{' SCATTER STRENGTH CALCULATION START ':*^80}")
+        # relative_strength = calculate_relative_strength(filtered_dict['fnames'], stack_map, stack_fitted_line, config)
+        # relative_strength_attenu = calculate_relative_strength(
+        #             filtered_dict['fnames'], stack_map, stack_fitted_line, config, True)
+        # print(f"  {' RELATIVE SCATTER STRENGTH ':=^60}")
+        # print(f"  {'Strength:':<20}{relative_strength:>8.3f}")
+        # print(f"  {'Strength after inner core attenuation correction:':<20}{relative_strength_attenu:>8.3f}")
+        # print(f"{' SCATTER STRENGTH CALCULATION END ':*^80}")
 
 if __name__ == '__main__':
     main()
