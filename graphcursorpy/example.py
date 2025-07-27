@@ -90,14 +90,14 @@ def main():
         print(f"\n{' MIGRATION-BASED LOCATION START ':*^80}")
         sca_infos = locate_scatterer(filtered_dict, df_eq2source_sca, df_source_sca2sta, 
                                      df_eq2receiver_sca, df_receiver_sca2sta, config, method = 'migration',
-                                     plot=True)
+                                     scatterer_choose = 'mean', plot=True)
         print(f"\n{' MIGRATION-BASED LOCATION END ':*^80}")
         
         # 4.2 Isotime-based location (Wen, 2000)
         print(f"\n{' ISOTIME-BASED LOCATION START ':*^80}")
         sca_infos = locate_scatterer(filtered_dict, df_eq2source_sca, df_source_sca2sta, 
                                      df_eq2receiver_sca, df_receiver_sca2sta, config, method = 'isotime',
-                                     plot=True)
+                                     scatterer_choose = 'mean', plot=True)
         print(f"\n{' ISOTIME-BASED LOCATION END ':*^80}")
         
         # # 4.3 Scatter strength calculation

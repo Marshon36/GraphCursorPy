@@ -602,7 +602,8 @@ def iterative_centroid(lats, lons, weights=None, max_iter=10, radius_factor=0.3)
 
 def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta, 
                      df_eq2receiver_sca, df_receiver_sca2sta, config,
-                     method = 'isotime', time_window = 2, plot = False,
+                     method = 'isotime', scatterer_choose = 'mean', 
+                     time_window = 2, plot = False,
                      save_fig = False, output_dir=None):
     """
     Locate scattering points by migrating GraphCursor predictions or 
@@ -625,6 +626,10 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
             Ray tracing results from receiver-side scattering to stations
         config (module): A Python module containing configuration settings.
         method (str): Choose a method to locate scatterer (isotime or migration).
+        scatterer_choose (str): Strategy for choosing scatterer location from peak region.
+                      Options:
+                        - 'mean': Use arithmetic mean of lat/lon values above threshold.
+                        - 'centroid': Use iterative centroid weighted by stacking amplitude.
         time_window (float): Time window length in seconds for stacking (default: 2.0).
         plot (bool): Whether to generate scatterer location plots (default: False).
         save_fig (bool): Whether to save the figure (default: False).
@@ -695,9 +700,11 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
     secondary_max = np.nanmax(min_data['stacks'][:, dp_idx])
     sca_lat_array = max_data['points'][:, 0][max_data['stacks'][:, dp_idx] >= secondary_max]
     sca_lon_array = max_data['points'][:, 1][max_data['stacks'][:, dp_idx] >= secondary_max]
-    sca_lat_max, sca_lon_max = np.nanmean(sca_lat_array), np.nanmean(sca_lon_array)
-    # weights = max_data['stacks'][:, dp_idx][max_data['stacks'][:, dp_idx] >= secondary_max]
-    # sca_lat_max, sca_lon_max = iterative_centroid(sca_lat_array, sca_lon_array, weights)
+    if scatterer_choose == 'mean':
+        sca_lat_max, sca_lon_max = np.nanmean(sca_lat_array), np.nanmean(sca_lon_array)
+    else:
+        weights = max_data['stacks'][:, dp_idx][max_data['stacks'][:, dp_idx] >= secondary_max]
+        sca_lat_max, sca_lon_max = iterative_centroid(sca_lat_array, sca_lon_array, weights)
     sca_lat_min = min_data['points'][np.unravel_index(np.nanargmax(min_data['stacks']), min_data['stacks'].shape)[0]][0]
     sca_lon_min = min_data['points'][np.unravel_index(np.nanargmax(min_data['stacks']), min_data['stacks'].shape)[0]][1]
 
