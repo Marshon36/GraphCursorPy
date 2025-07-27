@@ -695,8 +695,9 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
     secondary_max = np.nanmax(min_data['stacks'][:, dp_idx])
     sca_lat_array = max_data['points'][:, 0][max_data['stacks'][:, dp_idx] >= secondary_max]
     sca_lon_array = max_data['points'][:, 1][max_data['stacks'][:, dp_idx] >= secondary_max]
-    weights = max_data['stacks'][:, dp_idx][max_data['stacks'][:, dp_idx] >= secondary_max]
-    sca_lat_max, sca_lon_max = iterative_centroid(sca_lat_array, sca_lon_array, weights)
+    sca_lat_max, sca_lon_max = np.nanmean(sca_lat_array), np.nanmean(sca_lon_array)
+    # weights = max_data['stacks'][:, dp_idx][max_data['stacks'][:, dp_idx] >= secondary_max]
+    # sca_lat_max, sca_lon_max = iterative_centroid(sca_lat_array, sca_lon_array, weights)
     sca_lat_min = min_data['points'][np.unravel_index(np.nanargmax(min_data['stacks']), min_data['stacks'].shape)[0]][0]
     sca_lon_min = min_data['points'][np.unravel_index(np.nanargmax(min_data['stacks']), min_data['stacks'].shape)[0]][1]
 
