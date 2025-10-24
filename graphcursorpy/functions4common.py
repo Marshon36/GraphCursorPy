@@ -380,7 +380,7 @@ def normalize(x):
     return x_norm
 
 def plot_stacked_map(source_predicts, receiver_predicts, source_sca_points, receiver_sca_points, 
-                     array, loc, sca_lat_max, sca_lon_max, config, save_fig = False, 
+                     array, config, save_fig = False, 
                      output_dir=None, fk_dict = None):
     """
     Create a stacked comparison plot of source and receiver scattering amplitudes.
@@ -391,9 +391,6 @@ def plot_stacked_map(source_predicts, receiver_predicts, source_sca_points, rece
         source_sca_points (list/np.ndarray): Source scatter points (latitude, longitude).
         receiver_sca_points (list/np.ndarray): Receiver scatter points (latitude, longitude).
         array (str): Name of array.
-        loc (str): 'source' or 'receiver' to indicate scatter location.
-        sca_lat_max (float): Latitude of maximum scatter point.
-        sca_lon_max (float): Longitude of maximum scatter point.
         config (module): A Python module containing configuration settings. 
         fk_dict :
         save_fig (bool): Whether to save the figure (default: False).
@@ -418,7 +415,7 @@ def plot_stacked_map(source_predicts, receiver_predicts, source_sca_points, rece
     # Setup figure and Cartopy axes
     fontsize = 12
     fig = plt.figure(figsize=(12, 7))
-    gs = gridspec.GridSpec(1, 2, figure=fig)
+    gs = gridspec.GridSpec(1, 2, figure=fig, width_ratios=[1, 1])
     ax0 = fig.add_subplot(gs[0], projection=ccrs.PlateCarree())
     ax1 = fig.add_subplot(gs[1], projection=ccrs.PlateCarree())
     axs = [ax0, ax1]
@@ -436,14 +433,14 @@ def plot_stacked_map(source_predicts, receiver_predicts, source_sca_points, rece
         
     # Plot source side
     pcm1 = axs[0].pcolormesh(so_lons, so_lats, so_data,
-                             cmap=new_cmap, vmin=vmin, vmax=vmax,
+                             cmap=new_cmap, vmin=0, vmax=1,
                              transform=ccrs.PlateCarree()
                              )
     axs[0].set_title(f'Source-side', fontsize=fontsize)
 
     # Plot receiver side
     pcm2 = axs[1].pcolormesh(re_lons, re_lats, re_data,
-                             cmap=new_cmap, vmin=vmin, vmax=vmax,
+                             cmap=new_cmap, vmin=0, vmax=1,
                              transform=ccrs.PlateCarree()
                              )
     axs[1].set_title(f'Receiver-side', fontsize=fontsize)
@@ -459,22 +456,11 @@ def plot_stacked_map(source_predicts, receiver_predicts, source_sca_points, rece
                            marker = "x", s = 100, label = 'Scatter Location (FK)', color = 'darkgrey',
                            zorder = 5)
 
-    # Plot the location of scatter
-    if loc == 'source':
-        axs[0].scatter(sca_lon_max, sca_lat_max, s = 200, c = config.c1, 
-                      marker = "o", label = 'Scatterer Location', edgecolor = 'black',
-                      zorder = 6)
-        axs[0].legend(fontsize = fontsize)
-    else:
-        axs[1].scatter(sca_lon_max, sca_lat_max, s = 200, c = config.c1, 
-                      marker = "o", label = 'Scatterer Location', edgecolor = 'black',
-                      zorder = 6)
-        axs[1].legend(fontsize = fontsize)
-
     # Add a shared colorbar at the bottom
-    cbar_ax = fig.add_axes([0.124, 0.13, 0.779, 0.03])  # [left, bottom, width, height]
-    plt.colorbar(pcm2, cax=cbar_ax, orientation='horizontal', label='Scattering Likelihood')
+    cbar_ax = fig.add_axes([0.913, 0.262, 0.01, 0.604])  # [left, bottom, width, height]
+    plt.colorbar(pcm2, cax=cbar_ax, orientation='vertical', label='Scattering Probability')
     fig.subplots_adjust(bottom=0.25)
+    # fig.suptitle(array.split('_')[0].split('.')[0], y = 0.92, fontsize = fontsize)
 
     # Save or display
     if save_fig:
@@ -674,28 +660,21 @@ def plot_waveforms(df_array, config, save_fig=False, output_dir=None, title = No
     pass
 
 
-def plot_array_analysis(waveforms, distances, pre_time, post_time, vespagram_data,
-                        fk_data, smin, smax, vespa_slowness, fk_slowness, fk_backazimuth, 
-                        array_name, stat):
+def plot_array_analysis(pre_time, post_time, vespagram_data,
+                        fk_data, smin, smax, array_name, stat):
 
     """
-    Generate a three-panel array analysis plot including:
-    - Normalized seismic waveforms by distance
+    Generate a two-panel array analysis plot including:
     - Vespagram (slowness-time power image)
     - FK (frequency-wavenumber) slowness beamforming result
 
     Args:
-        waveforms (list of ndarray): List of 1D seismic waveforms (same length).
-        distances (list of float): Epicentral distances corresponding to waveforms.
         pre_time (float): Start time (s) relative to reference phase (e.g., PKPdf).
         post_time (float): End time (s) relative to reference phase.
         vespagram_data (2D ndarray): [slowness × time] array from beamforming.
         fk_data (2D ndarray): [slowness_y × slowness_x] array from FK analysis.
         smin (float): Minimum slowness (s/deg) for both vespagram and FK plots.
         smax (float): Maximum slowness (s/deg) for both vespagram and FK plots.
-        vespa_slowness (float): Slowness value of the vespagram peak (s/deg).
-        fk_slowness (float): Peak slowness value from FK analysis (s/deg).
-        fk_backazimuth (float): Back-azimuth (deg) corresponding to FK peak.
         array_name (str): Name of array/network for plot title.
         stat (str): If 'power', apply positive-only vespagram normalization.
 
@@ -704,22 +683,11 @@ def plot_array_analysis(waveforms, distances, pre_time, post_time, vespagram_dat
     """
     
     new_cmap = plt.get_cmap('Spectral_r')
-    fig = plt.figure(figsize=(15, 5))
-    gs = gridspec.GridSpec(1, 3)
+    fig = plt.figure(figsize=(10, 5))
+    gs = gridspec.GridSpec(1, 2)
     
-    # Waveform plot
-    ax1 = fig.add_subplot(gs[0, 0])
-    global_max = max(np.max(np.abs(wave[:500])) for wave in waveforms)
-    for wave, dist in zip(waveforms, distances):
-        time = np.linspace(pre_time, post_time, len(wave))
-        norm_wave = wave / global_max / 5
-        ax1.plot(time, -1 * norm_wave + dist, color='black', linewidth=0.7, zorder=1)
-    ax1.set(xlabel="Relative Time (s)", ylabel="Distance (degree)", xlim=(pre_time, post_time))
-    ax1.invert_yaxis()
-    ax1.set_title(array_name, fontsize = fontsize)
-
     # Vespagram plot
-    ax2 = fig.add_subplot(gs[0, 1])
+    ax2 = fig.add_subplot(gs[0, 0])
     max_vespagram = np.max(abs(vespagram_data))
     norm_vespa = vespagram_data / max_vespagram
     
@@ -736,11 +704,10 @@ def plot_array_analysis(waveforms, distances, pre_time, post_time, vespagram_dat
     )
     ax2.set(xlabel='Relative Time (s)', ylabel='Slowness (s/deg)')
     ax2.minorticks_on()
-    ax2.set_title(f'Vespagram Slowness: {vespa_slowness:.3f} s/deg', fontsize = fontsize)
     add_colorbar(fig, im, ax2, 'Normalized Amplitude')
 
     # FK plot
-    ax3 = fig.add_subplot(gs[0, 2])
+    ax3 = fig.add_subplot(gs[0, 1])
     x = np.linspace(-smax, smax, fk_data.shape[1])
     y = np.linspace(-smax, smax, fk_data.shape[0])
     X, Y = np.meshgrid(x, y)
@@ -756,8 +723,6 @@ def plot_array_analysis(waveforms, distances, pre_time, post_time, vespagram_dat
     )
     ax3.set(xlabel='East Slowness (s/deg)', ylabel='North Slowness (s/deg)')
     ax3.minorticks_on()
-    ax3.set_title(f'FK Slowness and Back-azimuth: {fk_slowness:.3f} s/deg, {fk_backazimuth:.3f}°',
-                  fontsize = fontsize)
     add_colorbar(fig, cf, ax3, 'Normalized Amplitude')
     plt.grid(True)
     plt.tight_layout()

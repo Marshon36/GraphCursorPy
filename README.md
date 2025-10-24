@@ -37,3 +37,7 @@ Run the provided example script:
 cd graphcursorpy
 python example.py
 ```
+
+## Reference
+
+Ma, S., Li, Z., Sun, D., Su, Y., Li, J., Si, X., & Zhu, J. (2025). Global Search of PKP Precursors With Graph Neural Network: Implications for Scatterers in the Lowermost Mantle. Geophysical Research Letters, 52(17), e2025GL115952. https://doi.org/10.1029/2025GL115952

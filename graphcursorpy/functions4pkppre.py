@@ -25,7 +25,7 @@ from graphcursorpy.functions4common import normalize, detect_peaks, DistAz, plot
 min_scadp, max_scadp, scadp_interval = 2391, 2891, 50
 scadps = np.arange(min_scadp, max_scadp+scadp_interval, scadp_interval)
 
-def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
+def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3, pkpdf_type = 'theo'):
     """
     Process and filter predictions from GraphCursor model outputs.
     
@@ -52,13 +52,14 @@ def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
 
     # Initialize containers using dictionary for better organization
     dict = {
-        'predictions': [],
-        'waveforms': [],
-        'station_locs': [],
-        'pkpdf_times': [],
         'dists': [],
         'fnames': [],
-        'outputs': []
+        'station_locs': [],
+        'predictions': [],
+        'waveforms': [],
+        'theo_pkpdf_times': [],
+        'real_pkpdf_times': [],
+        'rel_pkppre_times': []
     }
 
     # Get common event parameters from first trace
@@ -89,38 +90,46 @@ def screen_predictions(df_array, pred_path, mph, mpd, config, time_thres = -3):
         tr_cp = tr.copy()
         tr_cp.trim(tr_cp.stats.starttime + config.pre_window - config.waveform_time, tr_cp.stats.starttime + config.pre_window + 10)
         trimmed_waveform = tr_cp.data[:int(config.waveform_time*config.sr)]
+
+        # PKPdf
+        theo_pkpdf_time = tr.stats.starttime + config.pre_window - event_time
+        if pkpdf_type == 'theo':
+            real_pkpdf_time = theo_pkpdf_time
+        else:
+            real_pkpdf_time = UTCDateTime(row['pkpdf']) - event_time
         
         # Store results
-        dict['predictions'].append(pred)
-        dict['waveforms'].append(trimmed_waveform)
-        dict['station_locs'].append([tr.stats.sac.stla, tr.stats.sac.stlo])
-        dict['pkpdf_times'].append(tr.stats.starttime + config.pre_window - event_time)
         dict['dists'].append(row['dist'])
         dict['fnames'].append(row['fname'])
-        dict['outputs'].append(detection)
+        dict['station_locs'].append([tr.stats.sac.stla, tr.stats.sac.stlo])
+        dict['theo_pkpdf_times'].append(theo_pkpdf_time)
+        dict['real_pkpdf_times'].append(real_pkpdf_time)
+        dict['rel_pkppre_times'].append(detection[0])
+        dict['predictions'].append(pred)
+        dict['waveforms'].append(trimmed_waveform)
     
     # Convert to numpy arrays
     for key in dict:
         dict[key] = np.array(dict[key])
     
     # Apply time filter
-    time_mask = dict['outputs'][:, 0] <= time_thres
+    time_mask = (dict['rel_pkppre_times'] <= time_thres)
     filtered_dict = {
+        'evla': evla,
+        'evlo': evlo,
+        'evdp': evdp,
         'df_array': df_array.loc[time_mask].reset_index(drop=True),
         'fnames': dict['fnames'][time_mask],
         'dists': dict['dists'][time_mask],
+        'station_locs': dict['station_locs'][time_mask],
+        'theo_pkpdf_times': dict['theo_pkpdf_times'][time_mask],
+        'real_pkpdf_times': dict['real_pkpdf_times'][time_mask],
+        'rel_pkppre_times': dict['rel_pkppre_times'][time_mask],
         'waveforms': dict['waveforms'][time_mask],
         'predictions': dict['predictions'][time_mask],
-        'station_locs': dict['station_locs'][time_mask],
-        'pkpdf_times': dict['pkpdf_times'][time_mask],
-        'pkppre_times': dict['outputs'][time_mask][:, 0],
-        'evla': evla,
-        'evlo': evlo,
-        'evdp': evdp
     }
     
     return filtered_dict
-
 
 def calculate_centroid(stas):
     """
@@ -405,7 +414,8 @@ def calculate_sca2sta_times(df_sca2sta, sca_points, stas):
     return sca2sta_times
 
 def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
-                       stas, pkpdfs, pkppres, config, time_window = 2):
+                       stas, theo_pkpdfs, rel_pkppres, 
+                       config, time_window = 2):
     """
     Calculate PKP precursor arrivals and stack predictions for each scatterer point.
 
@@ -414,8 +424,8 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
         eq2sca_times (np.ndarray): Array of shape (n_points, n_scadps) with eq-to-scatterer times.
         sca2sta_times (np.ndarray): Array of shape (n_points, n_scadps, n_stas) with scatterer-to-station times.
         stas (list): List of station identifiers.
-        pkpdfs (np.ndarray): Array of PKPdf arrival times for each station.
-        pkppres (np.ndarray): Array of PKPpre arrival times relative to PKPdf for each station.
+        theo_pkpdfs (np.ndarray): Array of theoretical PKPdf arrival times for each station.
+        rel_pkppres (np.ndarray): Array of real PKPpre arrival times relative to PKPdf for each station.
         config (module): A Python module containing configuration settings. 
         time_window (float): Time uncertainty in seconds for stacking (default: 2.0).
 
@@ -423,7 +433,7 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
         stacks: Array of stacked predictions for each scatterer point.
     """
     # Initialize an array to store the maximum stacked predictions for each scatterer point
-    stacks = np.zeros((len(sca_points), len(config.scadps)))  # Default as NaN to mark uncalculated points
+    stacks = np.full((len(sca_points), len(config.scadps)), np.nan)  # Default as NaN to mark uncalculated points
     
     # Precompute theo_pkppre for all scatterer points and stations
     theo_pkppres = eq2sca_times[:, :, np.newaxis] + sca2sta_times  # Shape (n_sca_points, n_scadps, n_stas)
@@ -431,19 +441,20 @@ def stack_isotime_arcs(sca_points, eq2sca_times, sca2sta_times,
     # Loop through each scatterer point
     for i in range(len(sca_points)):
         for j in range(len(config.scadps)):
+            count = 0
             useful_stas = 0
             for k in range(len(stas)):
-                pkpdf = pkpdfs[k]
-                theo_pkppre = theo_pkppres[i, j, k] - pkpdf
-                real_pkppre = pkppres[k]
-                if -config.waveform_time < theo_pkppre < 0:
+                theo_pkpdf = theo_pkpdfs[k]
+                theo_rel_pkppre = theo_pkppres[i, j, k] - theo_pkpdf
+                rel_pkppre = rel_pkppres[k]
+                if -config.waveform_time < theo_rel_pkppre < 0:
                     useful_stas += 1
-                    if abs(theo_pkppre - real_pkppre) <= time_window:
-                        stacks[i, j] += 1
+                    if abs(theo_rel_pkppre - rel_pkppre) <= time_window:
+                        count += 1
 
             # Store the maximum value of stacked predictions for the current scatterer point
             if useful_stas > 0:
-                stacks[i, j] = stacks[i, j]/len(stas)
+                stacks[i, j] = count/len(stas)
     return stacks
 
 def stack_predictions(sca_points, eq2sca_times, sca2sta_times,
@@ -506,7 +517,8 @@ def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, stat
         event_loc (dict): Dictionary with keys 'lat', 'lon', and 'depth' specifying the earthquake location.
         station_data (dict): Dictionary with keys:
             - 'locations' (np.ndarray): Array of station (lat, lon) positions.
-            - 'pkpdf_times' (np.ndarray): PKPdf arrival times at each station.
+            - 'theo_pkpdf_times' (np.ndarray): Theoretical PKPdf arrival times at each station.
+            - 'real_pkpdf_times' (np.ndarray): Real PKPdf arrival times at each station.
             - 'predictions' (np.ndarray): Prediction waveform array for each station.
         config (object): Configuration object with fields such as 'diff' (grid size) and 'step' (grid step).
         method (str): Choose a method to locate scatterer (isotime or migration).
@@ -525,14 +537,15 @@ def process_scattering_side(pierce_point, eq2sca_df, sca2sta_df, event_loc, stat
     if method == 'isotime':
         stacks = stack_isotime_arcs(
             sca_points, eq2sca_times, sca2sta_times,
-            station_data['locations'], station_data['pkpdf_times'], 
-            station_data['pkppre_times'], config, time_window
+            station_data['locations'], station_data['theo_pkpdf_times'], 
+            station_data['rel_pkppre_times'], 
+            config, time_window
         )
 
     if method == 'migration':
         stacks = stack_predictions(
             sca_points, eq2sca_times, sca2sta_times,
-            station_data['locations'], station_data['pkpdf_times'], 
+            station_data['locations'], station_data['real_pkpdf_times'], 
             station_data['predictions'], config, time_window
         )
     
@@ -663,8 +676,9 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
     station_data = {
         'locations': dict4location['station_locs'],
         'predictions': dict4location['predictions'],
-        'pkpdf_times': dict4location['pkpdf_times'],
-        'pkppre_times': dict4location['pkppre_times']
+        'real_pkpdf_times': dict4location['real_pkpdf_times'],
+        'theo_pkpdf_times': dict4location['theo_pkpdf_times'],
+        'rel_pkppre_times': dict4location['rel_pkppre_times']
     }
 
     # Calculate station centroid and pierce points
@@ -715,9 +729,6 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
                 source_side['stacks'][:, receiver_dp_idx], receiver_side['stacks'][:, receiver_dp_idx],
                 source_side['points'], receiver_side['points'],
                 array_data['array'],
-                dominant_side,
-                sca_lat_max,
-                sca_lon_max,
                 config,
                 save_fig,
                 output_dir
@@ -727,9 +738,6 @@ def locate_scatterer(dict4location, df_eq2source_sca, df_source_sca2sta,
                 source_side['stacks'][:, source_dp_idx], receiver_side['stacks'][:, source_dp_idx],
                 source_side['points'], receiver_side['points'],
                 array_data['array'],
-                dominant_side,
-                sca_lat_max,
-                sca_lon_max,
                 config,
                 save_fig,
                 output_dir
@@ -1203,9 +1211,8 @@ def array_analysis(df_array, order, ssteps, stat, winlen, pre_time,
         # Generate plots if requested
         if plot:
             plot_array_analysis(
-                waveform_list, dist_list, pre_time, post_time,
-                vespagram_data, fk_data, smin, smax, vespa_slowness,
-                fk_slowness, fk_backazimuth, array_name, stat
+                pre_time, post_time,
+                vespagram_data, fk_data, smin, smax, array_name, stat
             )
         
         array_result = {'vespa_slowness': vespa_slowness,
